@@ -8,7 +8,7 @@ export default function Home() {
       </div>
 
       <footer className="w-full p-4 text-center text-gray-600 dark:text-gray-400 text-sm border-t border-gray-200 dark:border-gray-800">
-        <p>Built with Multi-Agent System</p>
+        <p>Built with Multi-Agent Systems</p>
       </footer>
     </main>
   )
