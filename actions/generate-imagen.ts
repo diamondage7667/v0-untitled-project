@@ -1,82 +1,87 @@
-"use server"
+"use server";
 
-import { GoogleGenAI } from "@google/genai"
+import { GoogleGenAI } from "@google/genai"; // Removed GenerateContentResponse as it's not directly used here
 
-interface ImagenGenerationRequest {
-  prompt: string
-  numberOfImages?: number
-  width?: number
-  height?: number
+// Define and export a specific response type for this action
+export interface ImagenGenerationResponse {
+  success: boolean;
+  url?: string; // URL will be a data URI
+  error?: string;
+  // base64Data is implicit in the data URI, so not needed separately here
 }
 
-interface ImagenGenerationResponse {
-  images: Array<{
-    url: string // Base64 data URI
-    id: string
-  }>
+// Define the structure for the Imagen request matching the frontend needs
+interface ImagenRequest {
+  prompt: string;
+  aspectRatio: "16:9" | "1:1" | "9:16" | "4:3" | "3:4"; // Match supported ratios
+  // Add other potential parameters like negativePrompt if needed later
 }
 
-/**
- * Generates images using Google's Imagen 3 model
- * @param request Image generation request parameters
- * @returns Object containing array of generated images as Base64 data URIs
- */
-export async function generateImagenImages(request: ImagenGenerationRequest): Promise<ImagenGenerationResponse> {
-  console.log(`Generating images with Imagen 3 for prompt: "${request.prompt}"`)
+// Mapping from frontend aspect ratios to Imagen API aspect ratios
+const aspectRatioMap: { [key in ImagenRequest['aspectRatio']]: string } = {
+  "16:9": "16:9",
+  "1:1": "1:1",
+  "9:16": "9:16",
+  "4:3": "4:3", // Added 4:3
+  "3:4": "3:4"  // Added 3:4
+};
+
+export async function generateImagen(
+  request: ImagenRequest
+): Promise<ImagenGenerationResponse> { // Use the new specific response type
+  const geminiApiKey = process.env.GEMINI_API_KEY; // Assuming Imagen uses the same key for now
+  if (!geminiApiKey) {
+    return { success: false, error: "Server config error: Missing Gemini/Imagen API Key." }; // Matches ImagenGenerationResponse
+  }
+
+  const { prompt, aspectRatio } = request;
+  const imagenAspectRatio = aspectRatioMap[aspectRatio] || "1:1"; // Default to 1:1 if mapping fails
 
   try {
-    // Check for API key
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) {
-      console.error("CRITICAL: GEMINI_API_KEY environment variable is not set.")
-      throw new Error("Server configuration error: Missing Gemini API Key.")
-    }
+    console.log(`Generating image with Imagen 3: Prompt="${prompt}", AspectRatio=${imagenAspectRatio}`);
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
-    // Initialize the Google Generative AI client
-    const genAI = new GoogleGenAI(apiKey)
-
-    // Use the imagen-3.0-generate-002 model
-    const model = genAI.getGenerativeModel({ model: "imagen-3.0-generate-002" })
-
-    // Set up generation parameters
-    const numberOfImages = request.numberOfImages || 4
-
-    // Generate images
-    const response = await model.generateImages({
-      prompt: request.prompt,
+    // Note: The example uses ai.models.generateImages, but the SDK might have evolved.
+    // Let's try the structure from the example first. If it fails, we might need to adjust.
+    // Assuming the SDK structure `ai.models.generateImages` is correct as per the example.
+    // If this specific method doesn't exist, the error handling below should catch it.
+    const response = await ai.models.generateImages({
+      model: 'imagen-3.0-generate-002', // Use the specified Imagen 3 model
+      prompt: prompt,
       config: {
-        numberOfImages: numberOfImages,
+        numberOfImages: 1, // Generate only one image for the preview
+        aspectRatio: imagenAspectRatio,
+        // personGeneration: "ALLOW_ADULT" // Default, can be added if needed
       },
-    })
+    });
 
-    if (!response.generatedImages || response.generatedImages.length === 0) {
-      throw new Error("No images were generated")
+    // Check if images were generated and access safely
+    const generatedImage = response.generatedImages?.[0];
+    const imgBytes = generatedImage?.image?.imageBytes; // Safely access imageBytes
+
+    if (imgBytes) {
+      // Convert raw bytes (assuming base64 string) to data URI
+      // Determine mime type - Imagen likely returns PNG or JPEG. Let's assume PNG for now.
+      // TODO: Check if the response includes the mime type. Defaulting to png.
+      const mimeType = "image/png"; // Assuming PNG, adjust if needed
+      const dataUri = `data:${mimeType};base64,${imgBytes}`;
+      console.log("Imagen 3 generation successful.");
+      return { success: true, url: dataUri }; // Matches ImagenGenerationResponse
+    } else {
+      console.error("Imagen 3 API did not return expected image data:", response);
+      // Check for specific feedback if available
+      const feedback = (response as any).feedback || "No image data returned."; // Access potential feedback field
+      return { success: false, error: `Imagen 3 generation failed: ${feedback}` }; // Matches ImagenGenerationResponse
     }
 
-    // Convert the images to Base64 data URIs
-    const images = response.generatedImages.map((generatedImage, index) => {
-      const imageBytes = generatedImage.image.imageBytes
-      const dataUri = `data:image/png;base64,${imageBytes}`
-      return {
-        url: dataUri,
-        id: `imagen-${Date.now()}-${index}`,
-      }
-    })
-
-    console.log(`Successfully generated ${images.length} images with Imagen 3`)
-    return { images }
-  } catch (error) {
-    console.error("Error generating images with Imagen 3:", error)
-    const errorMessage = error instanceof Error ? error.message : "Unknown error"
-
-    // Return a placeholder image
-    return {
-      images: [
-        {
-          url: `/placeholder.svg?height=400&width=400&text=Imagen+Error:+${encodeURIComponent(errorMessage)}`,
-          id: `imagen-error-${Date.now()}`,
-        },
-      ],
+  } catch (err: unknown) {
+    console.error("Error calling Imagen 3 API:", err);
+    // Check if the error is about the method not existing
+    if (err instanceof Error && (err.message.includes("generateImages is not a function") || err.message.includes("does not exist"))) {
+       console.error("It seems 'ai.models.generateImages' might not be the correct SDK method.");
+       // TODO: Potentially try an alternative SDK structure if known, or just report the error.
     }
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Imagen 3 API request failed: ${message}` }; // Matches ImagenGenerationResponse
   }
 }

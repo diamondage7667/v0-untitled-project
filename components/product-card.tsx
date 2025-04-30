@@ -1,127 +1,176 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import type { Product } from "@/types/product"
-import { Eye } from "lucide-react"
+import { useState, useContext } from "react";
+import type { Product } from "@/types/product";
+import Image from "next/image";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Eye, ShoppingBag, MoveVertical } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useCart, CartItem } from "@/context/CartContext"; // Import useCart hook and CartItem type
 
 interface ProductCardProps {
-  product: Product
+  product: Product;
+  storeId?: string; // Make storeId optional
+  accentColor?: string; // For badge and potentially buttons
+  isTrending?: boolean; // Specific prop for the badge
 }
 
-export function ProductCard({ product }: ProductCardProps) {
-  const [isHovered, setIsHovered] = useState(false)
+// Example accent color (Neon Green) - should match header or be passed
+const DEFAULT_ACCENT_COLOR = '#39FF14';
+
+export function ProductCard({
+  product,
+  storeId,
+  accentColor = DEFAULT_ACCENT_COLOR,
+  isTrending = false, // Default to false
+}: ProductCardProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [selectedSize, setSelectedSize] = useState<string | null>(
+    product.sizes && product.sizes.length > 0 ? product.sizes[0] : null
+  );
+  const { addToCart } = useCart(); // Use the custom hook
+
+  const handleAddToCart = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation(); // Prevent link navigation
+    e.preventDefault();
+    if (product) {
+      // Construct the CartItem object
+      const itemToAdd: CartItem = {
+        productId: product.id,
+        // Use storeId if provided, otherwise a default/fallback.
+        // Ensure CartContext/logic handles items without a specific storeId if necessary.
+        storeId: storeId || "unknown", // Provide a fallback like "unknown" or ""
+        title: product.name,
+        price: product.price,
+        imageUrl: product.imageUrl,
+        quantity: 1, // Add one item at a time from the card
+        // Include selected size if applicable (might need to adjust CartItem type or how size is handled)
+        // selectedSize: selectedSize, // This property isn't in the base CartItem type
+      };
+      addToCart(itemToAdd);
+      // Optionally show a toast notification here
+      console.log(`Added ${itemToAdd.title} (Size: ${selectedSize || 'N/A'}) to cart`);
+    }
+  };
+
+  const handleQuickView = (e: React.MouseEvent<HTMLButtonElement>) => {
+     e.stopPropagation();
+     e.preventDefault();
+     // TODO: Implement Quick View Modal logic
+     console.log(`Quick view for ${product.name}`);
+     alert(`Quick view for ${product.name} (Not Implemented)`);
+  }
+
+  const badgeStyle = {
+    backgroundColor: accentColor,
+    color: '#000000', // Assuming black text contrasts well with neon green
+  };
 
   return (
-    <>
-      <div
-        className="bg-white dark:bg-gray-800 overflow-hidden group transition duration-300"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <div className="relative">
-          <div className="relative h-64 overflow-hidden">
-            <img
-              src={product.imageUrl || "/placeholder.svg"}
-              alt={product.name}
-              className={`w-full h-full object-cover transition duration-500 ${isHovered ? "scale-105" : "scale-100"}`}
-            />
-            <div
-              className={`absolute inset-0 bg-black transition-opacity duration-300 ${isHovered ? "opacity-10" : "opacity-0"}`}
-            ></div>
-          </div>
+    <div
+      className="relative group overflow-hidden rounded-md border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-all duration-300 bg-background"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Conditionally construct the link based on storeId presence */}
+      <Link href={storeId ? `/store/${storeId}/product/${product.id}` : `/store/product/${product.id}`} className="absolute inset-0 z-10" aria-label={`View ${product.name}`}>
+        <span className="sr-only">View {product.name}</span>
+      </Link>
 
-          {product.badge && (
-            <div className="absolute top-0 left-0 bg-black text-white text-xs uppercase tracking-wider px-3 py-1">
-              {product.badge}
+      {/* Image Container */}
+      <div className="relative aspect-square overflow-hidden">
+        <Image
+          src={product.imageUrl || "/placeholder.svg"}
+          alt={product.name}
+          fill // Use fill for aspect ratio
+          className={cn(
+            "object-cover transition-transform duration-300 ease-in-out",
+            isHovered ? "scale-105" : "scale-100"
+          )}
+          sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw" // Optimize image loading
+        />
+
+        {/* Trending Badge */}
+        {isTrending && (
+          <Badge
+            variant="default" // Use default variant and apply custom style
+            className="absolute top-2 left-2 z-20"
+            style={badgeStyle}
+          >
+            Trending
+          </Badge>
+        )}
+
+        {/* --- Hover Overlay --- */}
+        <div
+          className={cn(
+            "absolute inset-0 z-20 flex flex-col justify-end p-4 bg-gradient-to-t from-black/60 via-black/30 to-transparent transition-opacity duration-300 ease-in-out",
+            isHovered ? "opacity-100" : "opacity-0 pointer-events-none" // Hide when not hovered
+          )}
+        >
+          {/* Drag Handle Indicator (Top Right) */}
+           <MoveVertical className="absolute top-2 right-2 h-5 w-5 text-white/50 cursor-grab" />
+
+          {/* Size Selector */}
+          {product.sizes && product.sizes.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2 justify-center">
+              {product.sizes.map((size) => (
+                <Button
+                  key={size}
+                  size="sm"
+                  variant={selectedSize === size ? "secondary" : "outline"}
+                  className={cn(
+                    "h-8 px-2 text-xs border-white/50 text-white hover:bg-white/20",
+                    selectedSize === size && "bg-white text-black border-white"
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent link navigation
+                    e.preventDefault();
+                    setSelectedSize(size);
+                  }}
+                >
+                  {size}
+                </Button>
+              ))}
             </div>
           )}
 
-          <div
-            className={`absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent transition-opacity duration-300 ${isHovered ? "opacity-100" : "opacity-0"}`}
-          >
-            <div className="flex justify-center space-x-2">
-              <button
-                className="bg-white text-black p-2 hover:bg-black hover:text-white transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  window.location.href = `/store/product/${product.id}`
-                }}
-                title="View product"
-              >
-                <Eye className="h-5 w-5" />
-              </button>
-              <button
-                className="bg-white text-black p-2 hover:bg-black hover:text-white transition-colors"
-                onClick={(e) => e.stopPropagation()}
-                title="Add to wishlist"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1}
-                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-5">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <h3 className="font-normal text-gray-900 dark:text-white mb-1 hover:underline underline-offset-4 uppercase tracking-wider text-sm">
-                <a href={`/store/product/${product.id}`}>{product.name}</a>
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 text-xs uppercase">{product.category}</p>
-            </div>
-            <div className="text-right">
-              <span className="font-normal text-gray-900 dark:text-white">${product.price.toFixed(2)}</span>
-              {product.badge === "SALE" && (
-                <p className="text-gray-900 dark:text-white text-xs line-through">
-                  ${(product.price * 1.2).toFixed(2)}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-2">{product.description}</p>
-
-          <div className="flex space-x-2">
-            <button className="flex-1 bg-black text-white py-2.5 text-xs uppercase tracking-wider hover:bg-black/80 transition-colors duration-300 flex items-center justify-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4 mr-2"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1}
-                  d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-                />
-              </svg>
-              Add to Cart
-            </button>
-            <a
-              href={`/store/product/${product.id}`}
-              className="px-3 py-2.5 border border-black dark:border-white hover:bg-black hover:text-white transition-colors flex items-center justify-center"
-              title="View details"
+          {/* Action Buttons */}
+          <div className="flex gap-2 justify-center">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="bg-white/90 text-black hover:bg-white text-xs h-9 px-3 flex-1"
+              onClick={handleQuickView}
+              aria-label={`Quick view ${product.name}`}
             >
-              <Eye className="h-5 w-5" />
-            </a>
+              <Eye className="h-4 w-4 mr-1" /> Quick View
+            </Button>
+            <Button
+              variant="default" // Use default, potentially style with accentColor later
+              size="sm"
+              className="bg-white/90 text-black hover:bg-white text-xs h-9 px-3 flex-1" // Use accentColor here if desired
+              onClick={handleAddToCart}
+              aria-label={`Add ${product.name} to bag`}
+              disabled={!selectedSize && product.sizes && product.sizes.length > 0} // Disable if sizes exist but none selected
+            >
+              <ShoppingBag className="h-4 w-4 mr-1" /> Add to Bag
+            </Button>
           </div>
         </div>
       </div>
-    </>
-  )
+
+      {/* --- Default Content (Visible when not hovered) --- */}
+      <div className={cn(
+          "p-4 transition-opacity duration-300",
+          isHovered ? "opacity-0" : "opacity-100"
+      )}>
+        {/* Added text-foreground for light/dark mode compatibility */}
+        <h3 className="text-sm font-medium truncate mb-1 text-foreground">{product.name}</h3>
+        <p className="text-sm font-semibold text-foreground">${product.price.toFixed(2)}</p>
+      </div>
+    </div>
+  );
 }

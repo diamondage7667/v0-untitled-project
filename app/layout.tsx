@@ -4,6 +4,8 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { CartProvider } from "@/context/CartContext";
+// CartDropdown import removed
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -21,9 +23,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider defaultTheme="light">
-          <header className="w-full p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-black dark:text-white">
-            <div className="flex items-center gap-2">
+        <ThemeProvider defaultTheme="light"> {/* Removed attribute, enableSystem, disableTransitionOnChange */}
+           <CartProvider> {/* Wrap content with CartProvider */}
+            <header className="w-full p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-black dark:text-white">
+              <div className="flex items-center gap-2">
               {/* Use different logos based on theme */}
               <img
                 src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/intelartsblack-IYOBEHZNHT6b6wXJn3mSto15UxlqcT.png"
@@ -62,14 +65,16 @@ export default function RootLayout({
               {/* Connect Store Button removed */}
 
               <ThemeToggle />
+              {/* CartDropdown removed from main header */}
             </div>
           </header>
           <div className="min-h-screen bg-gradient-to-b from-white to-gray-100 dark:from-gray-900 dark:to-black text-gray-900 dark:text-white">
             {children}
           </div>
-          <footer className="w-full p-4 text-center text-gray-600 dark:text-gray-400 text-sm border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-            <p>© 2025 Intel-Arts</p>
-          </footer>
+            <footer className="w-full p-4 text-center text-gray-600 dark:text-gray-400 text-sm border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+              <p>© 2025 Intel-Arts</p>
+            </footer>
+           </CartProvider> {/* Close CartProvider */}
         </ThemeProvider>
       </body>
     </html>

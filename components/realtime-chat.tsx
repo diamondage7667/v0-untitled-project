@@ -58,6 +58,7 @@ export default function RealtimeChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const initialPromptIdCounter = useRef(0); // Ref for unique ID counter
   const router = useRouter()
 
   const voices: Voice[] = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "sage", "ballad", "coral", "verse"]
@@ -690,7 +691,8 @@ export default function RealtimeChat() {
           role: "assistant",
           content:
             "To help me visualize products for you, could you upload a photo of yourself (for clothing) or your space (for decor)?",
-          id: "reference_photo_prompt",
+          // Use a ref counter for a guaranteed unique ID sequence
+          id: `reference_photo_prompt_${++initialPromptIdCounter.current}`,
         },
       ])
       setReferencePhotoPromptSent(true)
@@ -782,12 +784,12 @@ export default function RealtimeChat() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-950 dark:bg-gray-950">
-        {messages.map((message, index) => (
-          <div
-            key={message.id || index}
-            className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-          >
+       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-950 dark:bg-gray-950">
+         {messages.map((message) => ( // Removed index from map parameters as it's not needed for the key anymore
+           <div
+             key={message.id} // Use only message.id as the key, remove index fallback
+             className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+           >
             <div
               className={`max-w-[80%] rounded-lg p-3 shadow ${
                 message.role === "user" ? "bg-emerald-600 text-white" : "bg-gray-800 text-gray-100"

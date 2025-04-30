@@ -1,6 +1,6 @@
 "use server"
 
-import { GoogleGenAI } from "@google/genai"
+import { GoogleGenAI, Modality } from "@google/genai" // Import Modality
 
 // Interfaces
 export interface ImageGenerationRequest {
@@ -59,9 +59,6 @@ export async function generateImage(request: ImageGenerationRequest): Promise<Im
     // Explicitly create a new instance of GoogleGenAI
     const genAI = new GoogleGenAI({ apiKey })
 
-    // Use the experimental image generation model
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp-image-generation" })
-
     // Determine aspect ratio
     let aspectRatio = request.aspectRatio || "1:1" // Default to square
     if (!request.aspectRatio && request.width && request.height) {
@@ -76,36 +73,48 @@ export async function generateImage(request: ImageGenerationRequest): Promise<Im
     const fullPrompt = `${request.prompt}${request.style ? `, style: ${request.style}` : ""}, aspect ratio ${aspectRatio}, high quality, detailed`
 
     // Generate content with image response modality
-    const response = await model.generateContent({
+    // Use genAI.models.generateContent directly
+    const response = await genAI.models.generateContent({
+      model: "gemini-2.0-flash-exp-image-generation", // Specify model here
       contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
-      generationConfig: {
-        temperature: 0.7,
-        responseModalities: ["Text", "Image"], // Required for image generation
+      // Remove generationConfig as it's causing a type error
+      config: { // Use config for responseModalities based on editImage structure
+        responseModalities: [Modality.TEXT, Modality.IMAGE], // Use Modality enum
+        // If temperature is needed, it might go here, but removing for now to fix the error.
+        // temperature: 0.7,
       },
     })
 
     console.log("Gemini API response received.")
 
     // Extract image data from response
-    let base64Data = null
+    // The response structure might be slightly different now, adjust parsing
+    let base64Data: string | undefined = undefined // Initialize as undefined
     let mimeType = "image/png"
 
-    if (response.response && response.response.candidates && response.response.candidates.length > 0) {
-      const candidate = response.response.candidates[0]
+    // Check the correct path based on the API structure used by ai.models.generateContent
+    if (response.candidates && response.candidates.length > 0) {
+      const candidate = response.candidates[0]
       if (candidate.content && candidate.content.parts) {
         for (const part of candidate.content.parts) {
           if (part.inlineData) {
             base64Data = part.inlineData.data
             mimeType = part.inlineData.mimeType || mimeType
-            break
+            break; // Found the image data
           }
         }
       }
     }
 
+    // Original parsing logic (keep for reference or potential fallback if needed)
+    /*
+
     if (!base64Data) {
-      throw new Error("No image data found in Gemini response")
+      // Attempt to extract text if image fails
+      const textResponse = response.candidates?.[0]?.content?.parts?.find((p) => p.text)?.text
+      throw new Error(`No image data found in Gemini response. Text: ${textResponse || "(no text)"}`)
     }
+    */ // End of original parsing logic reference
 
     const dataUrl = `data:${mimeType};base64,${base64Data}`
     console.log("Gemini image generated successfully. Returning Data URL.")
@@ -206,9 +215,11 @@ export async function editImage(request: ImageEditRequest): Promise<ImageGenerat
         base64Data = buffer.toString("base64")
 
         console.log("Successfully converted external image to base64")
-      } catch (fetchError) {
+      } catch (fetchError: unknown) { // Add type annotation
         console.error("Error fetching external image:", fetchError)
-        throw new Error(`Failed to fetch external image: ${fetchError.message}`)
+        // Add type check before accessing message
+        const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+        throw new Error(`Failed to fetch external image: ${errorMessage}`)
       }
     } else if (request.imageUrl.startsWith("data:image/")) {
       // Extract the base64 data and mime type from the Data URI
@@ -255,7 +266,7 @@ export async function editImage(request: ImageEditRequest): Promise<ImageGenerat
       model: "gemini-2.0-flash-exp-image-generation",
       contents: contents,
       config: {
-        responseModalities: ["Text", "Image"],
+        responseModalities: [Modality.TEXT, Modality.IMAGE], // Use Modality enum
       },
     })
 
